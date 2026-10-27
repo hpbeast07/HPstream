@@ -49,7 +49,6 @@
       id: 'midnight-horizon',
       title: 'Midnight Horizon',
       tmdbId: '603', // Matrix example
-      tmdbId: '603',
       type: 'movie',
       category: 'hollywood',
       tagline: 'When the sun sets, the truth rises.',
@@ -75,8 +74,6 @@
       id: 'rangrezz',
       title: 'Rangrezz: Symphony of Fire',
       tmdbId: '557', // Spider-man example
-      tmdbId: '557',
-      tmdbId: '557',
       type: 'movie',
       category: 'bollywood',
       tagline: 'Every colour tells a story of rebellion and love.',
@@ -101,8 +98,6 @@
     {
       id: 'kage-no-kishi',
       title: 'Kage no Kishi: Shadow Knight',
-      tmdbId: '94605',
-      tmdbId: '94605',
       tmdbId: '94605', // Anime example
       type: 'series',
       category: 'anime',
