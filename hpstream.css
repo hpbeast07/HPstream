@@ -2883,3 +2883,835 @@ input, select, textarea {
   opacity: 1;
 }
 
+
+
+/* ============================================================
+   HPSTREAM VLC CINEMA PRO PLAYER ENGINE STYLES
+   ============================================================ */
+
+:root {
+  --vlc-orange: #ff7700;
+  --vlc-orange-hover: #ff9922;
+  --vlc-orange-glow: rgba(255, 119, 0, 0.45);
+  --vlc-orange-dim: rgba(255, 119, 0, 0.16);
+  --vlc-dark: #0e1015;
+  --vlc-metal: #181b22;
+  --vlc-metal-2: #212530;
+  --vlc-line: rgba(255, 255, 255, 0.12);
+}
+
+/* Aspect Ratio Controls on Player Container */
+.hp-video-player[data-ratio="16-9"] {
+  aspect-ratio: 16 / 9;
+}
+.hp-video-player[data-ratio="21-9"] {
+  aspect-ratio: 21 / 9;
+  max-height: 85vh;
+}
+.hp-video-player[data-ratio="4-3"] {
+  aspect-ratio: 4 / 3;
+  max-width: 960px;
+}
+.hp-video-player[data-ratio="fill"] {
+  aspect-ratio: auto;
+  height: 80vh;
+}
+
+/* VLC Hardware Filter Targets */
+.vlc-filter-target,
+#videoContainer iframe,
+#videoContainer video {
+  transition: filter 0.2s ease, transform 0.2s ease;
+  will-change: filter;
+}
+
+/* Auto-hide controls when user is idle */
+.hp-video-player.user-idle {
+  cursor: none !important;
+}
+.hp-video-player.user-idle .vlc-header-bar,
+.hp-video-player.user-idle .vlc-bottom-bar,
+.hp-video-player.user-idle .player-controls-overlay {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-8px);
+}
+.hp-video-player.user-idle .vlc-bottom-bar {
+  transform: translateY(8px);
+}
+
+/* VLC Header Bar (Top Bar inside player) */
+.vlc-header-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: linear-gradient(180deg, rgba(8, 10, 14, 0.95) 0%, rgba(8, 10, 14, 0.65) 60%, transparent 100%);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  pointer-events: none;
+}
+.hp-video-player:hover .vlc-header-bar,
+.hp-video-player:focus-within .vlc-header-bar {
+  opacity: 1;
+}
+.vlc-header-bar * {
+  pointer-events: auto;
+}
+
+.vlc-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vlc-cone-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(255, 119, 0, 0.2), rgba(255, 85, 0, 0.08));
+  border: 1px solid rgba(255, 119, 0, 0.45);
+  color: #ff9933;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px rgba(255, 119, 0, 0.2);
+}
+.vlc-cone-badge svg {
+  filter: drop-shadow(0 0 4px rgba(255, 119, 0, 0.8));
+}
+
+.vlc-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vlc-title-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vlc-badge-4k {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  background: rgba(0, 210, 255, 0.12);
+  border: 1px solid rgba(0, 210, 255, 0.3);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.vlc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vlc-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s var(--ease-out);
+  backdrop-filter: blur(8px);
+}
+.vlc-btn:hover {
+  background: rgba(255, 119, 0, 0.2);
+  border-color: rgba(255, 119, 0, 0.5);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 119, 0, 0.25);
+  transform: translateY(-1px);
+}
+.vlc-btn.active {
+  background: var(--vlc-orange);
+  border-color: var(--vlc-orange);
+  color: #fff;
+  box-shadow: 0 0 16px var(--vlc-orange-glow);
+}
+.vlc-btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* VLC On-Screen Display (OSD) */
+.vlc-osd {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 50;
+  background: rgba(14, 16, 22, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 119, 0, 0.5);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8), 0 0 18px rgba(255, 119, 0, 0.25);
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+  transition: all 0.22s var(--ease-out);
+  pointer-events: none;
+}
+.vlc-osd.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.vlc-osd-icon {
+  font-size: 18px;
+  color: var(--vlc-orange);
+}
+
+/* VLC Floating Bottom Control Bar */
+.vlc-bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px 14px;
+  background: linear-gradient(0deg, rgba(8, 10, 14, 0.98) 0%, rgba(8, 10, 14, 0.75) 65%, transparent 100%);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  pointer-events: none;
+}
+.hp-video-player:hover .vlc-bottom-bar,
+.hp-video-player:focus-within .vlc-bottom-bar {
+  opacity: 1;
+}
+.vlc-bottom-bar * {
+  pointer-events: auto;
+}
+
+/* VLC Native Scrubber Timeline */
+.vlc-timeline-wrap {
+  width: 100%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+.vlc-timeline-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  transition: height 0.18s ease;
+}
+.vlc-timeline-wrap:hover .vlc-timeline-track {
+  height: 8px;
+}
+.vlc-timeline-buffer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+}
+.vlc-timeline-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #ff5500, var(--vlc-orange));
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(255, 119, 0, 0.8);
+}
+.vlc-timeline-handle {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--vlc-orange);
+  box-shadow: 0 0 10px rgba(255, 119, 0, 0.9);
+  transition: transform 0.18s ease;
+}
+.vlc-timeline-wrap:hover .vlc-timeline-handle {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+.vlc-seek-tooltip {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  transform: translateX(-50%);
+  background: rgba(14, 16, 22, 0.95);
+  border: 1px solid var(--vlc-line);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.vlc-timeline-wrap:hover .vlc-seek-tooltip {
+  opacity: 1;
+}
+
+/* VLC Bottom Controls Row */
+.vlc-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.vlc-ctrls-left,
+.vlc-ctrls-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vlc-icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.vlc-icon-btn:hover {
+  background: rgba(255, 119, 0, 0.2);
+  color: var(--vlc-orange);
+  transform: scale(1.1);
+}
+.vlc-icon-btn.play-btn {
+  background: var(--vlc-orange);
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 0 14px var(--vlc-orange-glow);
+}
+.vlc-icon-btn.play-btn:hover {
+  background: var(--vlc-orange-hover);
+  transform: scale(1.12);
+}
+
+.vlc-time-display {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Outfit', monospace;
+  letter-spacing: 0.05em;
+  user-select: none;
+  cursor: pointer;
+}
+.vlc-time-display:hover {
+  color: var(--vlc-orange);
+}
+
+.vlc-vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vlc-vol-slider {
+  width: 75px;
+  height: 4px;
+  accent-color: var(--vlc-orange);
+  cursor: pointer;
+}
+.vlc-vol-boost-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--vlc-orange);
+  background: var(--vlc-orange-dim);
+  border: 1px solid rgba(255, 119, 0, 0.4);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+/* VLC Server Switcher Deck */
+.vlc-server-deck {
+  background: var(--vlc-dark);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  margin: 16px auto 20px;
+  max-width: 1180px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+.vlc-deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.vlc-deck-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.vlc-server-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vlc-server-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
+  background: var(--vlc-metal);
+  border: 1px solid var(--vlc-line);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.22s var(--ease-out);
+  white-space: nowrap;
+}
+.vlc-server-btn:hover {
+  background: var(--vlc-metal-2);
+  border-color: rgba(255, 119, 0, 0.4);
+  color: #fff;
+  transform: translateY(-2px);
+}
+.vlc-server-btn.active {
+  background: linear-gradient(135deg, rgba(255, 119, 0, 0.22), rgba(255, 85, 0, 0.1));
+  border-color: var(--vlc-orange);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(255, 119, 0, 0.25);
+}
+.vlc-server-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-faint);
+}
+.vlc-server-btn.active .vlc-server-badge {
+  background: var(--vlc-orange);
+  color: #fff;
+}
+
+/* VLC Server Status Row */
+.vlc-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--vlc-line);
+  font-size: 12px;
+}
+.vlc-status-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-faint);
+}
+.vlc-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2fd280;
+  box-shadow: 0 0 8px #2fd280;
+  animation: livePulse 2s ease infinite;
+}
+.vlc-status-dot.loading {
+  background: #f5c518;
+  box-shadow: 0 0 8px #f5c518;
+}
+.vlc-status-dot.offline {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+.vlc-status-ping {
+  color: #2fd280;
+  font-weight: 700;
+  background: rgba(47, 210, 128, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(47, 210, 128, 0.25);
+}
+
+/* VLC Quick Tools Strip */
+.vlc-tools-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  margin: 0 auto 20px;
+  max-width: 1180px;
+}
+.vlc-tool-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vlc-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vlc-pill {
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.vlc-pill:hover {
+  background: var(--panel-3);
+  border-color: rgba(255, 119, 0, 0.35);
+  color: #fff;
+}
+.vlc-pill.active {
+  background: var(--vlc-orange-dim);
+  border-color: var(--vlc-orange);
+  color: var(--vlc-orange);
+  box-shadow: 0 0 10px rgba(255, 119, 0, 0.2);
+}
+
+/* Series Quick Navigation Strip */
+.vlc-series-quick-strip {
+  background: var(--vlc-dark);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin: 0 auto 20px;
+  max-width: 1180px;
+}
+.vlc-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.vlc-strip-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.vlc-season-picker {
+  display: flex;
+  gap: 6px;
+}
+.vlc-season-btn {
+  padding: 3px 10px;
+  border-radius: var(--radius-xs);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.vlc-season-btn.active {
+  background: var(--vlc-orange);
+  border-color: var(--vlc-orange);
+  color: #fff;
+}
+.vlc-episodes-carousel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}
+.vlc-ep-pill {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--vlc-metal);
+  border: 1px solid var(--vlc-line);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.vlc-ep-pill:hover {
+  background: var(--vlc-metal-2);
+  border-color: rgba(255, 119, 0, 0.4);
+  color: #fff;
+  transform: translateY(-2px);
+}
+.vlc-ep-pill.active {
+  background: var(--vlc-orange-dim);
+  border-color: var(--vlc-orange);
+  color: var(--vlc-orange);
+}
+.vlc-ep-num {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--vlc-orange);
+}
+.vlc-ep-name {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vlc-ep-dur {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* VLC Error & Fallback Banner */
+.vlc-error-banner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 16, 0.96);
+  z-index: 20;
+  padding: 30px;
+  text-align: center;
+}
+.vlc-error-cone {
+  font-size: 48px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 16px rgba(255, 119, 0, 0.4));
+}
+.vlc-error-banner h3 {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: #fff;
+}
+.vlc-error-banner p {
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 420px;
+  margin-bottom: 20px;
+}
+.vlc-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Cinema Lights Off Overlay */
+.vlc-cinema-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+  z-index: 99990;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.vlc-cinema-backdrop.active {
+  opacity: 0.94;
+  visibility: visible;
+}
+.hp-video-player.cinema-focused {
+  z-index: 99995 !important;
+  box-shadow: 0 0 100px rgba(0, 0, 0, 1), 0 0 60px var(--vlc-orange-glow) !important;
+}
+
+/* VLC Modals */
+.vlc-modal-box {
+  background: var(--vlc-dark);
+  border: 1px solid rgba(255, 119, 0, 0.4);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 24px rgba(255, 119, 0, 0.2);
+}
+.vlc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--vlc-line);
+}
+.vlc-brand-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vlc-brand-title h3 {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+}
+.vlc-modal-body {
+  padding: 22px;
+}
+
+/* Dropzone for Local Video Playback */
+.vlc-dropzone {
+  border: 2px dashed rgba(255, 119, 0, 0.4);
+  border-radius: var(--radius-md);
+  padding: 36px 20px;
+  text-align: center;
+  background: rgba(255, 119, 0, 0.04);
+  transition: all 0.25s ease;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.vlc-dropzone:hover,
+.vlc-dropzone.dragover {
+  background: rgba(255, 119, 0, 0.1);
+  border-color: var(--vlc-orange);
+  box-shadow: 0 0 24px rgba(255, 119, 0, 0.25);
+}
+.vlc-drop-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+.vlc-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 18px 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.vlc-divider::before,
+.vlc-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--vlc-line);
+}
+.vlc-divider span {
+  padding: 0 12px;
+}
+.vlc-url-input-wrap {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.vlc-url-input-wrap input {
+  flex: 1;
+}
+
+/* VLC Effects Sliders */
+.vlc-effects-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  margin-bottom: 20px;
+}
+@media (max-width: 600px) {
+  .vlc-effects-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.vlc-effect-ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.vlc-effect-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.vlc-effect-slider {
+  width: 100%;
+  accent-color: var(--vlc-orange);
+  cursor: pointer;
+}
+
+/* VLC Shortcuts Table */
+.vlc-shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.vlc-shortcuts-table tr {
+  border-bottom: 1px solid var(--vlc-line);
+}
+.vlc-shortcuts-table td {
+  padding: 10px 8px;
+}
+.vlc-kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--vlc-metal-2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffaa44;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}

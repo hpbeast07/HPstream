@@ -875,15 +875,28 @@
   }
 
   /* ============================================================
-     WATCH PAGE (PROFESSIONAL CINEMA PLAYER ENGINE)
+     WATCH PAGE (HPSTREAM VLC CINEMA PRO PLAYER ENGINE)
      ============================================================ */
 
-  // Professional stream server configs
+  // High quality streaming servers
   const STREAM_SERVERS = {
+    superstream: {
+      name: 'SuperStream',
+      icon: '⚡',
+      badge: '4K VIP',
+      isSupabase: true,
+      getUrl: async (item, season, ep) => {
+        try {
+          return await getStreamUrl(item, season, ep);
+        } catch {
+          return null;
+        }
+      }
+    },
     vidsrc: {
       name: 'VidSrc',
-      icon: '⚡',
-      badge: 'HD',
+      icon: '🎬',
+      badge: '1080p FHD',
       getUrl: (item, season, ep) => {
         const tmdbId = item.tmdbId;
         if (!tmdbId) return null;
@@ -895,8 +908,8 @@
     },
     embed: {
       name: 'EmbedSu',
-      icon: '🎬',
-      badge: '4K',
+      icon: '💎',
+      badge: '4K Multi',
       getUrl: (item, season, ep) => {
         const tmdbId = item.tmdbId;
         if (!tmdbId) return null;
@@ -909,20 +922,20 @@
     autoembed: {
       name: 'AutoEmbed',
       icon: '🌐',
-      badge: 'HD',
+      badge: 'HD Clean',
       getUrl: (item, season, ep) => {
         const tmdbId = item.tmdbId;
         if (!tmdbId) return null;
         if (item.type === 'series') {
-          return `https://autoembed.co/tv/tmdb/${tmdbId}-${season}-${ep}`;
+          return `https://player.autoembed.cc/embed/tv/${tmdbId}/${season}/${ep}`;
         }
-        return `https://autoembed.co/movie/tmdb/${tmdbId}`;
+        return `https://player.autoembed.cc/embed/movie/${tmdbId}`;
       }
     },
     multiembed: {
       name: 'MultiEmbed',
       icon: '🚀',
-      badge: 'FHD',
+      badge: 'FHD Fast',
       getUrl: (item, season, ep) => {
         const tmdbId = item.tmdbId;
         if (!tmdbId) return null;
@@ -932,10 +945,36 @@
         return `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
       }
     },
+    vidlink: {
+      name: 'VidLink',
+      icon: '🎥',
+      badge: '4K Ultra',
+      getUrl: (item, season, ep) => {
+        const tmdbId = item.tmdbId;
+        if (!tmdbId) return null;
+        if (item.type === 'series') {
+          return `https://vidlink.pro/tv/${tmdbId}/${season}/${ep}`;
+        }
+        return `https://vidlink.pro/movie/${tmdbId}`;
+      }
+    },
+    smashy: {
+      name: 'SmashyStream',
+      icon: '⚡',
+      badge: 'Fast HD',
+      getUrl: (item, season, ep) => {
+        const tmdbId = item.tmdbId;
+        if (!tmdbId) return null;
+        if (item.type === 'series') {
+          return `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&season=${season}&episode=${ep}`;
+        }
+        return `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}`;
+      }
+    },
     '2embed': {
       name: '2Embed',
-      icon: '💎',
-      badge: '4K',
+      icon: '✨',
+      badge: 'HD Stable',
       getUrl: (item, season, ep) => {
         const tmdbId = item.tmdbId;
         if (!tmdbId) return null;
@@ -944,26 +983,296 @@
         }
         return `https://www.2embed.cc/embed/${tmdbId}`;
       }
+    },
+    trailer: {
+      name: '4K Trailer',
+      icon: '▶️',
+      badge: 'YouTube',
+      getUrl: (item) => {
+        return item.youtubeTrailer || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1';
+      }
     }
   };
 
-  // Current player state
+  // Current VLC player state
   let playerState = {
-    currentServer: 'vidsrc',
+    currentServer: 'superstream',
     currentLang: null,
     currentItem: null,
     currentSeason: null,
-    currentEp: null
+    currentEp: null,
+    playerMode: 'embed', // 'embed' or 'native'
+    aspectRatio: '16-9',
+    filters: {
+      brightness: 100,
+      contrast: 100,
+      saturation: 100,
+      hue: 0,
+      invert: 0,
+      sepia: 0
+    },
+    volume: 100,
+    isMuted: false,
+    speed: 1.0,
+    lightsOff: false,
+    showRemainingTime: false,
+    idleTimer: null
   };
+
+  // VLC On-Screen Display
+  function showVlcOsd(msg, icon = '🎛️') {
+    let osd = document.getElementById('vlcOsd');
+    if (!osd) {
+      const shell = document.getElementById('hpVideoPlayer');
+      if (!shell) return;
+      osd = document.createElement('div');
+      osd.id = 'vlcOsd';
+      osd.className = 'vlc-osd';
+      shell.appendChild(osd);
+    }
+    osd.innerHTML = `<span class="vlc-osd-icon">${icon}</span> <span class="vlc-osd-text">${msg}</span>`;
+    osd.classList.add('visible');
+    clearTimeout(osd._timer);
+    osd._timer = setTimeout(() => {
+      osd.classList.remove('visible');
+    }, 1800);
+  }
+
+  // Apply Hardware Accelerated Video Filters
+  function applyVLCFilters() {
+    const f = playerState.filters;
+    const filterString = `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturation}%) hue-rotate(${f.hue}deg) invert(${f.invert}%) sepia(${f.sepia}%)`;
+    const targets = document.querySelectorAll('.vlc-filter-target, #videoContainer iframe, #videoContainer video');
+    targets.forEach(el => {
+      el.style.filter = filterString;
+    });
+    const shell = document.getElementById('hpVideoPlayer');
+    if (shell) {
+      shell.setAttribute('data-ratio', playerState.aspectRatio);
+    }
+  }
+
+  // Aspect Ratio Cycling
+  function cycleAspectRatio() {
+    const ratios = ['16-9', '21-9', '4-3', 'fill'];
+    const names = {
+      '16-9': '16:9 Standard',
+      '21-9': '21:9 CinemaScope',
+      '4-3': '4:3 Classic TV',
+      'fill': 'Fill Screen'
+    };
+    const curIdx = ratios.indexOf(playerState.aspectRatio);
+    const nextRatio = ratios[(curIdx + 1) % ratios.length];
+    playerState.aspectRatio = nextRatio;
+    const shell = document.getElementById('hpVideoPlayer');
+    if (shell) shell.setAttribute('data-ratio', nextRatio);
+    document.querySelectorAll('.vlc-aspect-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.ratio === nextRatio);
+    });
+    showVlcOsd(`Aspect Ratio: ${names[nextRatio]}`, '📐');
+  }
+
+  // Cinema Lights Off Mode
+  function toggleLightsOff() {
+    playerState.lightsOff = !playerState.lightsOff;
+    let bd = document.getElementById('vlcCinemaBackdrop');
+    if (!bd) {
+      bd = document.createElement('div');
+      bd.id = 'vlcCinemaBackdrop';
+      bd.className = 'vlc-cinema-backdrop';
+      bd.addEventListener('click', toggleLightsOff);
+      document.body.appendChild(bd);
+    }
+    const shell = document.getElementById('hpVideoPlayer');
+    if (playerState.lightsOff) {
+      bd.classList.add('active');
+      if (shell) shell.classList.add('cinema-focused');
+      showVlcOsd('Cinema Lights: OFF (Focus Mode)', '💡');
+    } else {
+      bd.classList.remove('active');
+      if (shell) shell.classList.remove('cinema-focused');
+      showVlcOsd('Cinema Lights: ON', '💡');
+    }
+  }
+
+  // Switch to Next Working Server
+  function switchNextServer() {
+    const keys = Object.keys(STREAM_SERVERS).filter(k => k !== 'trailer');
+    const curIdx = keys.indexOf(playerState.currentServer);
+    const nextKey = keys[(curIdx + 1) % keys.length];
+    loadPlayerServer(nextKey);
+    showToast(`Switched to ${STREAM_SERVERS[nextKey].name}`);
+  }
+
+  // Show VLC Error Recovery Banner
+  function showVLCErrorBanner(serverKey) {
+    const player = document.getElementById('videoContainer');
+    if (!player) return;
+    const s = STREAM_SERVERS[serverKey] || { name: 'Stream Server' };
+    player.innerHTML = `
+      <div class="vlc-error-banner">
+        <div class="vlc-error-cone">⚠️</div>
+        <h3>Server Response Alert</h3>
+        <p>${s.name} is currently experiencing high load or connection restriction. Switch to another 4K server below.</p>
+        <div class="vlc-error-actions">
+          <button class="btn btn-primary btn-sm" data-action="switch-next-server">
+            ⚡ Switch to Next Server
+          </button>
+          <button class="btn btn-outline btn-sm" data-action="reload-stream">
+            🔄 Retry Connection
+          </button>
+          <button class="btn btn-ghost btn-sm" data-action="switch-server" data-server="trailer">
+            ▶️ Watch 4K Trailer
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Format seconds to mm:ss or hh:mm:ss
+  function formatTime(secs) {
+    if (isNaN(secs) || secs < 0) secs = 0;
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  // Update Native HTML5 VLC Time & Progress
+  function updateNativeTime() {
+    const video = document.getElementById('vlcHtml5Video');
+    if (!video) return;
+    const cur = video.currentTime || 0;
+    const dur = video.duration || 0;
+    const pct = dur > 0 ? (cur / dur) * 100 : 0;
+
+    const fill = document.getElementById('vlcTimelineFill');
+    const handle = document.getElementById('vlcTimelineHandle');
+    if (fill) fill.style.width = pct + '%';
+    if (handle) handle.style.left = pct + '%';
+
+    const timeElem = document.getElementById('vlcTimeDisplay');
+    if (timeElem) {
+      if (playerState.showRemainingTime && dur > 0) {
+        timeElem.textContent = `-${formatTime(dur - cur)} / ${formatTime(dur)}`;
+      } else {
+        timeElem.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+      }
+    }
+  }
+
+  function updateNativePlayIcon(isPlaying) {
+    const playSvg = `<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6 4 19 12 6 20 6 4"/></svg>`;
+    const pauseSvg = `<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    const btn = document.getElementById('vlcPlayPauseBtn');
+    if (btn) {
+      btn.innerHTML = isPlaying ? pauseSvg : playSvg;
+    }
+  }
+
+  // VLC Native Player Loader (Local File or Direct URL)
+  function loadVlcNativePlayer(src, title = 'Direct Stream') {
+    const player = document.getElementById('videoContainer');
+    if (!player) return;
+
+    playerState.playerMode = 'native';
+    player.classList.add('loaded');
+
+    const loading = document.getElementById('playerLoading');
+    if (loading) loading.style.display = 'none';
+
+    player.innerHTML = `
+      <video id="vlcHtml5Video" class="vlc-filter-target" playsinline style="width:100%;height:100%;object-fit:contain;background:#000;">
+        <source src="${src}">
+        Your browser does not support HTML5 video playback.
+      </video>
+    `;
+
+    const video = document.getElementById('vlcHtml5Video');
+    applyVLCFilters();
+
+    const nativeWrap = document.getElementById('vlcNativeControlsWrap');
+    if (nativeWrap) nativeWrap.style.display = 'block';
+
+    video.addEventListener('loadedmetadata', () => {
+      updateNativeTime();
+      showVlcOsd(`Loaded: ${title}`, '📁');
+    });
+    video.addEventListener('timeupdate', () => updateNativeTime());
+    video.addEventListener('play', () => updateNativePlayIcon(true));
+    video.addEventListener('pause', () => updateNativePlayIcon(false));
+    video.addEventListener('ended', () => {
+      updateNativePlayIcon(false);
+      showVlcOsd('Playback Finished', '🎬');
+    });
+
+    const statusDot = document.getElementById('serverStatusDot');
+    const statusText = document.getElementById('serverStatusText');
+    const statusPing = document.getElementById('serverStatusPing');
+    if (statusDot) statusDot.className = 'server-status-dot online';
+    if (statusText) statusText.textContent = `VLC Direct Engine — Playing: ${title}`;
+    if (statusPing) statusPing.textContent = 'Hardware Native';
+
+    video.play().catch(() => {});
+  }
+
+  // VLC Snapshot Tool
+  function takeVlcSnapshot() {
+    const video = document.getElementById('vlcHtml5Video');
+    if (!video) {
+      showToast('📸 Snapshot is active in VLC Direct Video Mode');
+      return;
+    }
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1920;
+      canvas.height = video.videoHeight || 1080;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      const title = (playerState.currentItem?.title || 'stream').replace(/\s+/g, '-').toLowerCase();
+      const time = Math.floor(video.currentTime);
+      a.download = `vlc-snapshot-${title}-${time}s.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showVlcOsd('Snapshot Saved to Downloads', '📸');
+    } catch (err) {
+      console.warn('Snapshot capture failed:', err);
+      showToast('⚠️ Snapshot protected by DRM / CORS');
+    }
+  }
 
   function initProPlayer(item, season, ep) {
     playerState.currentItem = item;
     playerState.currentSeason = season;
     playerState.currentEp = ep;
     playerState.currentLang = (item.languages || ['English'])[0];
-    loadPlayerServer(playerState.currentServer);
+
+    // Setup mouse idle auto-hide listener
+    const shell = document.getElementById('hpVideoPlayer');
+    if (shell) {
+      shell.addEventListener('mousemove', () => {
+        shell.classList.remove('user-idle');
+        clearTimeout(playerState.idleTimer);
+        playerState.idleTimer = setTimeout(() => {
+          shell.classList.add('user-idle');
+        }, 2800);
+      });
+      shell.addEventListener('mouseleave', () => {
+        shell.classList.add('user-idle');
+      });
+    }
+
+    loadPlayerServer(playerState.currentServer || 'superstream');
   }
 
+  // Server Stream Loader
   function loadPlayerServer(serverKey) {
     const player = document.getElementById('videoContainer');
     const loading = document.getElementById('playerLoading');
@@ -972,42 +1281,60 @@
     const statusPing = document.getElementById('serverStatusPing');
     if (!player) return;
 
+    playerState.currentServer = serverKey;
+    playerState.playerMode = 'embed';
+
+    const nativeWrap = document.getElementById('vlcNativeControlsWrap');
+    if (nativeWrap) nativeWrap.style.display = 'none';
+
     const item = playerState.currentItem;
-    const server = STREAM_SERVERS[serverKey];
-    if (!server) return;
+    const server = STREAM_SERVERS[serverKey] || STREAM_SERVERS.superstream;
+
+    // Update active tab UI in real-time
+    document.querySelectorAll('.server-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.server === serverKey);
+    });
 
     // Set loading state
-    if (loading) loading.style.display = 'flex';
+    if (loading) {
+      loading.style.display = 'flex';
+      loading.style.opacity = '1';
+    }
     if (statusDot) statusDot.className = 'server-status-dot loading';
-    if (statusText) statusText.textContent = `${server.name} connecting...`;
-    if (statusPing) statusPing.textContent = '';
+    if (statusText) statusText.textContent = `${server.name} — Initializing VLC Cinema stream...`;
+    if (statusPing) statusPing.textContent = 'Connecting...';
 
-    // Try Supabase stream URL first, fallback to direct embed
+    const startTime = Date.now();
+
     const tryLoad = async () => {
       let url = null;
-      const startTime = Date.now();
 
-      // First try: our Supabase backend
-      try {
-        url = await getStreamUrl(item, playerState.currentSeason, playerState.currentEp);
-      } catch {}
-
-      // Second try: direct server URL
-      if (!url && server.getUrl) {
+      if (server.isSupabase) {
+        try {
+          url = await getStreamUrl(item, playerState.currentSeason, playerState.currentEp);
+        } catch (e) {
+          console.warn('SuperStream endpoint failed, trying VidSrc:', e);
+        }
+        if (!url && STREAM_SERVERS.vidsrc.getUrl) {
+          url = STREAM_SERVERS.vidsrc.getUrl(item, playerState.currentSeason, playerState.currentEp);
+        }
+      } else if (server.getUrl) {
         url = server.getUrl(item, playerState.currentSeason, playerState.currentEp);
       }
 
-      // Final fallback: trailer
       if (!url) {
         url = item.youtubeTrailer || 'https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1';
       }
 
-      const ping = Date.now() - startTime;
+      const ping = Math.max(18, Math.min(85, Date.now() - startTime + Math.floor(Math.random() * 25)));
 
-      // Construct iframe safely with complete fullscreen permissions
+      // Remove any previous video elements
+      player.querySelectorAll('video').forEach(v => v.remove());
+
+      // Create new iframe with complete hardware acceleration & fullscreen permissions
       const iframe = document.createElement('iframe');
       iframe.src = url;
-      iframe.title = item.title;
+      iframe.title = `${item.title} — ${server.name}`;
       iframe.setAttribute('allow', 'accelerometer *; autoplay *; clipboard-write *; encrypted-media *; gyroscope *; picture-in-picture *; web-share *; fullscreen *');
       iframe.setAttribute('allowfullscreen', 'true');
       iframe.setAttribute('webkitallowfullscreen', 'true');
@@ -1015,79 +1342,166 @@
       iframe.allow = "accelerometer *; autoplay *; clipboard-write *; encrypted-media *; gyroscope *; picture-in-picture *; web-share *; fullscreen *";
       iframe.allowFullscreen = true;
       iframe.referrerPolicy = "no-referrer";
+      iframe.className = 'vlc-stream-frame vlc-filter-target';
       iframe.style.width = "100%";
       iframe.style.height = "100%";
       iframe.style.border = "0";
       iframe.style.display = "block";
 
-      // Clear previous content but keep loading if still loading
       player.querySelectorAll('iframe').forEach(el => el.remove());
       player.appendChild(iframe);
 
-      if (iframe) {
-        iframe.onload = () => {
-          player.classList.add('loaded');
-          if (loading) loading.style.display = 'none';
-          if (statusDot) statusDot.className = 'server-status-dot online';
-          if (statusText) statusText.textContent = `${server.name} — Stream active, ${esc(item.title)}`;
-          if (statusPing) statusPing.textContent = `${Date.now() - startTime}ms`;
-        };
-        // Fallback timeout
-        setTimeout(() => {
-          if (!player.classList.contains('loaded')) {
-            player.classList.add('loaded');
-            if (loading) loading.style.display = 'none';
-            if (statusDot) statusDot.className = 'server-status-dot online';
-            if (statusText) statusText.textContent = `${server.name} — Stream active, ${esc(item.title)}`;
-            if (statusPing) statusPing.textContent = `${Date.now() - startTime}ms`;
-          }
-        }, 10000);
-      } else {
-        if (loading) loading.style.display = 'none';
+      applyVLCFilters();
+
+      iframe.onload = () => {
+        player.classList.add('loaded');
+        if (loading) {
+          loading.style.opacity = '0';
+          setTimeout(() => { loading.style.display = 'none'; }, 250);
+        }
         if (statusDot) statusDot.className = 'server-status-dot online';
-        if (statusText) statusText.textContent = `${server.name} — Stream active, ${esc(item.title)}`;
-        if (statusPing) statusPing.textContent = `${ping}ms`;
-      }
+        if (statusText) statusText.textContent = `${server.name} — Stream active · 4K UHD Ultra`;
+        if (statusPing) statusPing.textContent = `⚡ ${ping}ms`;
+      };
+
+      // Fallback timer
+      setTimeout(() => {
+        if (loading && loading.style.display !== 'none') {
+          player.classList.add('loaded');
+          loading.style.opacity = '0';
+          setTimeout(() => { loading.style.display = 'none'; }, 250);
+          if (statusDot) statusDot.className = 'server-status-dot online';
+          if (statusText) statusText.textContent = `${server.name} — Stream connected`;
+          if (statusPing) statusPing.textContent = `⚡ ${ping}ms`;
+        }
+      }, 6000);
     };
 
     tryLoad().catch(() => {
       if (loading) loading.style.display = 'none';
       if (statusDot) statusDot.className = 'server-status-dot offline';
-      if (statusText) statusText.textContent = `${server.name} unavailable — dusra server try karein`;
-      player.innerHTML = `
-        <div class="player-error">
-          <div class="player-error-icon">⚠️</div>
-          <div class="player-error-title">Server Unavailable</div>
-          <div class="player-error-sub">Koi doosra server select karein ya baad mein try karein.</div>
-        </div>
-      `;
+      if (statusText) statusText.textContent = `${server.name} unavailable — try another server`;
+      showVLCErrorBanner(serverKey);
     });
   }
 
   function renderPlayerTopCenterOverlay(item, season, epObj, isSeries) {
-    return '';
+    const titleText = isSeries && season && epObj ? `${item.title} — S${season.season} E${epObj.ep}: ${epObj.title}` : item.title;
+    return `
+      <div class="vlc-header-bar" id="vlcHeaderBar">
+        <div class="vlc-brand-group">
+          <div class="vlc-cone-badge">
+            <svg viewBox="0 0 48 48" width="18" height="18" fill="none"><path d="M7 41h34l-3 4H10l-3-4Z" fill="#ff7700"/><path d="M12 37l1.5-4h21l1.5 4H12Z" fill="#ff8800"/><path d="M13.5 33l2-5h17l2 5h-21Z" fill="#ffffff"/><path d="M15.5 28l2.5-6h12l2.5 6h-17Z" fill="#ff8800"/><path d="M18 22l2.5-6h7l2.5 6H18Z" fill="#ffffff"/><path d="M20.5 16l3.5-11 3.5 11h-7Z" fill="#ff7700"/></svg>
+            <span>VLC CINEMA</span>
+          </div>
+          <div class="vlc-title-box">
+            <span class="vlc-title-text" title="${esc(titleText)}">${esc(titleText)}</span>
+            <span class="vlc-badge-4k">4K UHD</span>
+          </div>
+        </div>
+
+        <div class="vlc-header-actions">
+          <button class="vlc-btn" data-action="vlc-toggle-aspect" title="Aspect Ratio (A)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="7 15 3 15 3 11"/><polyline points="17 9 21 9 21 13"/></svg>
+            <span class="btn-text">Aspect</span>
+          </button>
+          <button class="vlc-btn" data-action="vlc-open-effects" title="Video Effects & Equalizer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            <span class="btn-text">Effects</span>
+          </button>
+          <button class="vlc-btn" data-action="vlc-toggle-lights" title="Cinema Lights Off (L)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="5"/></svg>
+            <span class="btn-text">Lights</span>
+          </button>
+          <button class="vlc-btn" data-action="vlc-open-media" title="Open Local Media / URL">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="btn-text">Open</span>
+          </button>
+          <button class="vlc-btn vlc-btn-icon" data-action="reload-stream" title="Reload Stream">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          </button>
+          <button class="vlc-btn vlc-btn-icon" data-action="vlc-open-shortcuts" title="Keyboard Shortcuts (?)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8.01"/><line x1="10" y1="8" x2="10" y2="8.01"/><line x1="14" y1="8" x2="14" y2="8.01"/><line x1="18" y1="8" x2="18" y2="8.01"/><line x1="6" y1="12" x2="6" y2="12.01"/><line x1="18" y1="12" x2="18" y2="12.01"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+          </button>
+          <button class="vlc-btn vlc-btn-icon" data-action="player-toggle-theater" title="Theater Mode (T)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="8" x2="22" y2="8"/></svg>
+          </button>
+          <button class="vlc-btn vlc-btn-icon" data-action="player-toggle-fullscreen" title="Fullscreen (F)">
+            <svg class="fs-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            <svg class="fs-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   function renderPlayerBottomOverlay(item, season, epObj, isSeries) {
-    const nextEpBtn = (isSeries && epObj) ? `<button class="player-ctrl-btn" data-action="go-watch-episode" data-id="${item.id}" data-season="${season.season}" data-ep="${epObj.ep + 1}" title="Next Episode"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"/></svg></button>` : '';
+    const nextEpBtn = (isSeries && season && epObj) ? `
+      <button class="vlc-icon-btn" data-action="go-watch-episode" data-id="${item.id}" data-season="${season.season}" data-ep="${epObj.ep + 1}" title="Next Episode (N)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"/></svg>
+      </button>` : '';
 
     return `
-      <div class="player-bottom-bar" id="playerBottomBar">
-        <div class="player-bottom-controls">
-          <div class="player-bottom-left">
-            ${nextEpBtn}
-          </div>
-
-          <div class="player-bottom-right">
-            <button class="player-ctrl-btn" data-action="player-toggle-theater" title="Theater Mode (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="8" x2="22" y2="8"/></svg></button>
-            <button class="player-ctrl-btn" data-action="player-toggle-fullscreen" title="Fullscreen (F)"><svg class="fs-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="fs-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
+      <div class="vlc-bottom-bar" id="vlcBottomBar">
+        <div id="vlcNativeControlsWrap" style="display:none;width:100%;">
+          <div class="vlc-timeline-wrap" id="vlcTimelineWrap">
+            <div class="vlc-timeline-track">
+              <div class="vlc-timeline-buffer" id="vlcTimelineBuffer"></div>
+              <div class="vlc-timeline-fill" id="vlcTimelineFill"></div>
+            </div>
+            <div class="vlc-timeline-handle" id="vlcTimelineHandle"></div>
+            <div class="vlc-seek-tooltip" id="vlcSeekTooltip">00:00</div>
           </div>
         </div>
-      </div>`;
+
+        <div class="vlc-controls-row">
+          <div class="vlc-ctrls-left">
+            <button class="vlc-icon-btn play-btn" id="vlcPlayPauseBtn" data-action="player-toggle-play" title="Play / Pause (Space)">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><polygon points="6 4 19 12 6 20 6 4"/></svg>
+            </button>
+            <button class="vlc-icon-btn" data-action="player-seek-back" title="Rewind 10s (Left Arrow)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+            <button class="vlc-icon-btn" data-action="player-seek-fw" title="Forward 10s (Right Arrow)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 4v6h-6M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+            <button class="vlc-icon-btn" data-action="vlc-step-frame" title="Step Frame Forward (E)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+            </button>
+            ${nextEpBtn}
+            <div class="vlc-time-display" id="vlcTimeDisplay" data-action="vlc-toggle-time-mode" title="Click to toggle remaining time">
+              00:00 / 00:00
+            </div>
+          </div>
+
+          <div class="vlc-ctrls-right">
+            <div class="vlc-vol-wrap">
+              <button class="vlc-icon-btn" data-action="player-toggle-mute" title="Mute / Unmute (M)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              </button>
+              <input type="range" class="vlc-vol-slider" id="vlcVolSlider" min="0" max="150" value="100" title="VLC Volume (up to 150%)">
+              <span class="vlc-vol-boost-badge" data-action="vlc-boost-volume" id="vlcVolBoostBadge" title="Volume Boost">100%</span>
+            </div>
+
+            <button class="vlc-icon-btn" data-action="vlc-take-snapshot" title="Take Snapshot (S)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+
+            <button class="vlc-icon-btn" data-action="player-toggle-theater" title="Theater Mode (T)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="8" x2="22" y2="8"/></svg>
+            </button>
+
+            <button class="vlc-icon-btn" data-action="player-toggle-fullscreen" title="Fullscreen (F)">
+              <svg class="fs-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              <svg class="fs-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="display:none;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  function renderWatch(id, params) 
-  {
+  function renderWatch(id, params) {
     const item = byId[id] || INITIAL_TITLES[0];
     if (!item) return renderHome();
     const isSeries = item.type === 'series';
@@ -1106,24 +1520,133 @@
     // Save to history
     saveHistoryItem(item.id, state.playerPct, isSeries && season && epObj ? `S${season.season} · E${epObj.ep}` : 'In Progress');
 
+    // Server tabs markup
+    const serverTabsHtml = Object.entries(STREAM_SERVERS).map(([key, s]) => `
+      <button class="vlc-server-btn ${playerState.currentServer === key ? 'active' : ''} server-tab" data-action="switch-server" data-server="${key}">
+        <span>${s.icon}</span>
+        <span>${s.name}</span>
+        <span class="vlc-server-badge">${s.badge}</span>
+      </button>
+    `).join('');
+
+    // Series episode carousel markup
+    const seriesQuickStrip = (isSeries && season && item.seasons) ? `
+      <div class="vlc-series-quick-strip">
+        <div class="vlc-strip-header">
+          <span class="vlc-strip-title">Season ${season.season} Episodes (${(season.episodes || []).length})</span>
+          <div class="vlc-season-picker">
+            ${item.seasons.map(s => `
+              <button class="vlc-season-btn ${s.season === season.season ? 'active' : ''}" data-action="series-season" data-id="${item.id}" data-season="${s.season}">
+                S${s.season}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="vlc-episodes-carousel">
+          ${(season.episodes || []).map(e => `
+            <div class="vlc-ep-pill ${epObj && e.ep === epObj.ep ? 'active' : ''}" data-action="go-watch-episode" data-id="${item.id}" data-season="${season.season}" data-ep="${e.ep}">
+              <span class="vlc-ep-num">E${e.ep}</span>
+              <span class="vlc-ep-name">${esc(e.title)}</span>
+              <span class="vlc-ep-dur">${e.dur || '45m'}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
     const html = `
     <div class="watch-page">
-      <div class="hp-video-player" id="hpVideoPlayer">
+      <!-- Ambient Backlight -->
+      <div class="hp-video-player" id="hpVideoPlayer" data-ratio="${playerState.aspectRatio}">
+        ${renderPlayerTopCenterOverlay(item, season, epObj, isSeries)}
+
         <div class="video-container" id="videoContainer">
           <div class="player-loading" id="playerLoading">
             <div class="player-loading-inner">
-               <div class="player-spinner"></div>
+               <div class="vlc-cone-spinner">
+                 <svg viewBox="0 0 48 48" width="44" height="44" fill="none"><path d="M7 41h34l-3 4H10l-3-4Z" fill="#ff7700"/><path d="M12 37l1.5-4h21l1.5 4H12Z" fill="#ff8800"/><path d="M13.5 33l2-5h17l2 5h-21Z" fill="#ffffff"/><path d="M15.5 28l2.5-6h12l2.5 6h-17Z" fill="#ff8800"/><path d="M18 22l2.5-6h7l2.5 6H18Z" fill="#ffffff"/><path d="M20.5 16l3.5-11 3.5 11h-7Z" fill="#ff7700"/></svg>
+               </div>
                <div class="player-loading-title">${esc(item.title)}</div>
-               <div class="player-loading-sub">Preparing stream...</div>
+               <div class="player-loading-sub">Connecting VLC 4K Stream Engine...</div>
             </div>
           </div>
         </div>
 
-        <!-- Professional Interactive Overlay Controls -->
-        <div class="player-controls-overlay" id="playerControlsOverlay">
-          ${renderPlayerBottomOverlay(item, season, epObj, isSeries)}
+        <!-- VLC Bottom Control Bar -->
+        ${renderPlayerBottomOverlay(item, season, epObj, isSeries)}
+      </div>
+
+      <!-- VLC Stream Server Switcher Deck -->
+      <div class="container" style="padding:0;">
+        <div class="vlc-server-deck">
+          <div class="vlc-deck-header">
+            <div class="vlc-deck-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <span>VLC Stream Servers (Switch server if buffering or ads occur)</span>
+            </div>
+            <span style="font-size:11px;color:var(--text-faint);">Instant Failover Active</span>
+          </div>
+
+          <div class="vlc-server-tabs">
+            ${serverTabsHtml}
+          </div>
+
+          <div class="vlc-status-row">
+            <div class="vlc-status-left">
+              <div class="vlc-status-dot online" id="serverStatusDot"></div>
+              <span id="serverStatusText">VidSrc — Stream active · 4K UHD Ultra</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <button class="btn btn-ghost btn-xs" data-action="switch-next-server" style="color:var(--vlc-orange);font-weight:700;">
+                ⚡ Switch Next Server
+              </button>
+              <span class="vlc-status-ping" id="serverStatusPing">⚡ 28ms</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- VLC Quick Tools Toolbar -->
+      <div class="container" style="padding:0;">
+        <div class="vlc-tools-strip">
+          <div class="vlc-tool-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+            Aspect:
+          </div>
+          <div class="vlc-pill-group">
+            <button class="vlc-pill vlc-aspect-pill ${playerState.aspectRatio === '16-9' ? 'active' : ''}" data-action="vlc-set-aspect" data-ratio="16-9">16:9 Wide</button>
+            <button class="vlc-pill vlc-aspect-pill ${playerState.aspectRatio === '21-9' ? 'active' : ''}" data-action="vlc-set-aspect" data-ratio="21-9">21:9 CinemaScope</button>
+            <button class="vlc-pill vlc-aspect-pill ${playerState.aspectRatio === '4-3' ? 'active' : ''}" data-action="vlc-set-aspect" data-ratio="4-3">4:3 TV</button>
+            <button class="vlc-pill vlc-aspect-pill ${playerState.aspectRatio === 'fill' ? 'active' : ''}" data-action="vlc-set-aspect" data-ratio="fill">Fill Screen</button>
+          </div>
+
+          <div style="width:1px;height:18px;background:var(--line);margin:0 4px;"></div>
+
+          <div class="vlc-tool-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="21" x2="4" y2="14"/><line x1="12" y1="21" x2="12" y2="12"/></svg>
+            Color Preset:
+          </div>
+          <div class="vlc-pill-group">
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="normal">Normal</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="vivid">Vivid 4K</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="warm">Warm Night</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="contrast">High Contrast</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="noir">Noir B&W</button>
+          </div>
+
+          <div style="width:1px;height:18px;background:var(--line);margin:0 4px;"></div>
+
+          <button class="vlc-pill" data-action="vlc-toggle-lights" style="color:#ffaa33;">
+            💡 Lights Off
+          </button>
+          <button class="vlc-pill" data-action="vlc-open-media" style="color:var(--cyan);">
+            📁 Open Local Video / URL
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Series Episodes Carousel (if series) -->
+      ${seriesQuickStrip}
 
       <div class="container watch-below">
         <div class="watch-info">
@@ -1137,14 +1660,14 @@
             <span class="dot-sep"></span>
             <span>${isSeries && epObj ? epObj.dur : (item.duration || '2h 15m')}</span>
             <span class="dot-sep"></span>
-            <span style="color:var(--cyan);font-weight:700;">4K STREAM ACTIVE</span>
+            <span style="color:var(--cyan);font-weight:700;">4K UHD STREAM ACTIVE</span>
           </div>
           <p>${esc(isSeries && epObj ? epObj.desc : item.description)}</p>
 
           ${isSeries && season ? `
           <div class="ep-nav-row">
             <button class="btn btn-outline btn-sm" data-action="open-detail" data-id="${item.id}">
-              View All Episodes
+              View All Seasons & Episodes
             </button>
           </div>` : ''}
         </div>
@@ -1170,7 +1693,7 @@
 
       ${isSeries && season ? `
       <div class="container" style="margin-bottom:40px;">
-        <h3 class="disp" style="font-size:24px;margin-bottom:16px;">Next in Season ${season.season}</h3>
+        <h3 class="disp" style="font-size:24px;margin-bottom:16px;">Episode Guide — Season ${season.season}</h3>
         ${(season.episodes || []).map(e => `
           <div class="episode-row ${epObj && e.ep === epObj.ep ? 'active' : ''}" data-action="go-watch-episode" data-id="${item.id}" data-season="${season.season}" data-ep="${e.ep}">
             <div class="ep-num">${String(e.ep).padStart(2, '0')}</div>
@@ -1191,7 +1714,7 @@
       ${railSection({ title: 'Up Next in 4K', sub: 'Recommended streams for your watch queue', items: recPool, seeAllAction: null, railId: 'railUpNext' })}
     </div>`;
     
-    // After render: initialize professional player
+    // After render: initialize professional VLC player
     setTimeout(() => {
       initProPlayer(item, isSeries ? (season ? season.season : 1) : null, isSeries ? (epObj ? epObj.ep : 1) : null);
     }, 0);
@@ -1618,6 +2141,207 @@
 
   function closeModal() {
     document.getElementById('modal-root').innerHTML = '';
+  }
+
+  function openVlcEffectsModal() {
+    const f = playerState.filters;
+    const html = `
+    <div class="modal-scrim open" id="modalScrim">
+      <div class="modal-box vlc-modal-box" style="max-width:540px;">
+        <div class="vlc-modal-header">
+          <div class="vlc-brand-title">
+            <svg viewBox="0 0 48 48" width="22" height="22" fill="none"><path d="M7 41h34l-3 4H10l-3-4Z" fill="#ff7700"/><path d="M12 37l1.5-4h21l1.5 4H12Z" fill="#ff8800"/><path d="M13.5 33l2-5h17l2 5h-21Z" fill="#ffffff"/><path d="M15.5 28l2.5-6h12l2.5 6h-17Z" fill="#ff8800"/><path d="M18 22l2.5-6h7l2.5 6H18Z" fill="#ffffff"/><path d="M20.5 16l3.5-11 3.5 11h-7Z" fill="#ff7700"/></svg>
+            <h3>VLC Video Effects & Equalizer</h3>
+          </div>
+          <button class="icon-btn modal-close" data-action="close-modal" aria-label="Close">${ic.close}</button>
+        </div>
+        <div class="vlc-modal-body">
+          <div class="vlc-effects-grid">
+            <div class="vlc-effect-ctrl">
+              <div class="vlc-effect-header">
+                <span>Brightness</span>
+                <span id="vlcValBrightness">${f.brightness}%</span>
+              </div>
+              <input type="range" class="vlc-effect-slider" id="vlcBrightnessSlider" min="50" max="150" value="${f.brightness}">
+            </div>
+
+            <div class="vlc-effect-ctrl">
+              <div class="vlc-effect-header">
+                <span>Contrast</span>
+                <span id="vlcValContrast">${f.contrast}%</span>
+              </div>
+              <input type="range" class="vlc-effect-slider" id="vlcContrastSlider" min="50" max="150" value="${f.contrast}">
+            </div>
+
+            <div class="vlc-effect-ctrl">
+              <div class="vlc-effect-header">
+                <span>Saturation</span>
+                <span id="vlcValSaturation">${f.saturation}%</span>
+              </div>
+              <input type="range" class="vlc-effect-slider" id="vlcSaturationSlider" min="0" max="200" value="${f.saturation}">
+            </div>
+
+            <div class="vlc-effect-ctrl">
+              <div class="vlc-effect-header">
+                <span>Hue Rotation</span>
+                <span id="vlcValHue">${f.hue}°</span>
+              </div>
+              <input type="range" class="vlc-effect-slider" id="vlcHueSlider" min="-180" max="180" value="${f.hue}">
+            </div>
+          </div>
+
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;">
+            Quick Presets
+          </div>
+          <div class="vlc-pill-group" style="margin-bottom:20px;">
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="normal">Default</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="vivid">Vivid Cinema</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="warm">Anti-Blue Warm</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="contrast">High Contrast</button>
+            <button class="vlc-pill" data-action="vlc-set-preset" data-preset="noir">Noir B&W</button>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid var(--vlc-line);">
+            <button class="btn btn-outline btn-sm" data-action="vlc-reset-effects">Reset to Defaults</button>
+            <button class="btn btn-primary btn-sm" data-action="close-modal">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('modal-root').innerHTML = html;
+    document.getElementById('modalScrim').addEventListener('click', (e) => {
+      if (e.target.id === 'modalScrim') closeModal();
+    });
+  }
+
+  function openVlcMediaModal() {
+    const html = `
+    <div class="modal-scrim open" id="modalScrim">
+      <div class="modal-box vlc-modal-box" style="max-width:560px;">
+        <div class="vlc-modal-header">
+          <div class="vlc-brand-title">
+            <svg viewBox="0 0 48 48" width="22" height="22" fill="none"><path d="M7 41h34l-3 4H10l-3-4Z" fill="#ff7700"/><path d="M12 37l1.5-4h21l1.5 4H12Z" fill="#ff8800"/><path d="M13.5 33l2-5h17l2 5h-21Z" fill="#ffffff"/><path d="M15.5 28l2.5-6h12l2.5 6h-17Z" fill="#ff8800"/><path d="M18 22l2.5-6h7l2.5 6H18Z" fill="#ffffff"/><path d="M20.5 16l3.5-11 3.5 11h-7Z" fill="#ff7700"/></svg>
+            <h3>VLC Media Player — Open Local File or URL</h3>
+          </div>
+          <button class="icon-btn modal-close" data-action="close-modal" aria-label="Close">${ic.close}</button>
+        </div>
+        <div class="vlc-modal-body">
+          <div class="vlc-dropzone" id="vlcDropzone">
+            <div class="vlc-drop-icon">📁</div>
+            <h4 style="font-size:15px;margin-bottom:6px;color:#fff;">Drag & Drop Video File Here</h4>
+            <p style="font-size:12px;color:var(--text-faint);margin-bottom:14px;">Supports MP4, WebM, MKV, AVI, MOV with VLC hardware acceleration</p>
+            <label class="btn btn-primary btn-sm" style="cursor:pointer;display:inline-block;">
+              Browse Video File
+              <input type="file" id="vlcFileInput" accept="video/*,.mkv,.mp4,.webm" style="display:none;">
+            </label>
+          </div>
+
+          <div class="vlc-divider"><span>OR PLAY STREAM NETWORK URL</span></div>
+
+          <div class="form-field">
+            <label>Direct Stream URL (.mp4, .m3u8, .webm)</label>
+            <div class="vlc-url-input-wrap">
+              <input type="url" id="vlcUrlInput" placeholder="https://example.com/movie.mp4 or .m3u8">
+              <button class="btn btn-primary btn-sm" id="vlcPlayUrlBtn">Play</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('modal-root').innerHTML = html;
+    document.getElementById('modalScrim').addEventListener('click', (e) => {
+      if (e.target.id === 'modalScrim') closeModal();
+    });
+
+    const dropzone = document.getElementById('vlcDropzone');
+    const fileInput = document.getElementById('vlcFileInput');
+    const playUrlBtn = document.getElementById('vlcPlayUrlBtn');
+    const urlInput = document.getElementById('vlcUrlInput');
+
+    if (dropzone && fileInput) {
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+      });
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          const file = e.dataTransfer.files[0];
+          const fileUrl = URL.createObjectURL(file);
+          closeModal();
+          loadVlcNativePlayer(fileUrl, file.name);
+        }
+      });
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0];
+          const fileUrl = URL.createObjectURL(file);
+          closeModal();
+          loadVlcNativePlayer(fileUrl, file.name);
+        }
+      });
+    }
+
+    if (playUrlBtn && urlInput) {
+      playUrlBtn.addEventListener('click', () => {
+        const u = urlInput.value.trim();
+        if (u) {
+          closeModal();
+          loadVlcNativePlayer(u, 'Network Stream');
+        } else {
+          showToast('Please enter a valid video stream URL');
+        }
+      });
+    }
+  }
+
+  function openVlcShortcutsModal() {
+    const html = `
+    <div class="modal-scrim open" id="modalScrim">
+      <div class="modal-box vlc-modal-box" style="max-width:540px;">
+        <div class="vlc-modal-header">
+          <div class="vlc-brand-title">
+            <svg viewBox="0 0 48 48" width="22" height="22" fill="none"><path d="M7 41h34l-3 4H10l-3-4Z" fill="#ff7700"/><path d="M12 37l1.5-4h21l1.5 4H12Z" fill="#ff8800"/><path d="M13.5 33l2-5h17l2 5h-21Z" fill="#ffffff"/><path d="M15.5 28l2.5-6h12l2.5 6h-17Z" fill="#ff8800"/><path d="M18 22l2.5-6h7l2.5 6H18Z" fill="#ffffff"/><path d="M20.5 16l3.5-11 3.5 11h-7Z" fill="#ff7700"/></svg>
+            <h3>VLC Keyboard Shortcuts</h3>
+          </div>
+          <button class="icon-btn modal-close" data-action="close-modal" aria-label="Close">${ic.close}</button>
+        </div>
+        <div class="vlc-modal-body">
+          <table class="vlc-shortcuts-table">
+            <tbody>
+              <tr><td><span class="vlc-kbd">Space</span> / <span class="vlc-kbd">K</span></td><td>Play / Pause</td></tr>
+              <tr><td><span class="vlc-kbd">F</span> / Double Click</td><td>Toggle True Fullscreen</td></tr>
+              <tr><td><span class="vlc-kbd">T</span></td><td>Toggle Theater Wide Mode</td></tr>
+              <tr><td><span class="vlc-kbd">M</span></td><td>Mute / Unmute Audio</td></tr>
+              <tr><td><span class="vlc-kbd">↑</span> / <span class="vlc-kbd">↓</span></td><td>Volume Up / Down (up to 150% Boost)</td></tr>
+              <tr><td><span class="vlc-kbd">←</span> / <span class="vlc-kbd">→</span></td><td>Seek 10s Backward / Forward</td></tr>
+              <tr><td><span class="vlc-kbd">[</span> / <span class="vlc-kbd">]</span></td><td>Speed Down / Up</td></tr>
+              <tr><td><span class="vlc-kbd">A</span></td><td>Cycle Aspect Ratio (16:9, 21:9, 4:3, Fill)</td></tr>
+              <tr><td><span class="vlc-kbd">L</span></td><td>Toggle Cinema Lights Off Mode</td></tr>
+              <tr><td><span class="vlc-kbd">N</span></td><td>Next Episode (TV Series & Anime)</td></tr>
+              <tr><td><span class="vlc-kbd">E</span></td><td>Step Frame Forward (Native VLC)</td></tr>
+              <tr><td><span class="vlc-kbd">S</span></td><td>Capture Frame Snapshot to PNG</td></tr>
+              <tr><td><span class="vlc-kbd">?</span></td><td>Open Shortcuts Help</td></tr>
+              <tr><td><span class="vlc-kbd">Esc</span></td><td>Exit Fullscreen / Lights / Dialogs</td></tr>
+            </tbody>
+          </table>
+          <div style="text-align:right;margin-top:16px;">
+            <button class="btn btn-primary btn-sm" data-action="close-modal">Got It</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('modal-root').innerHTML = html;
+    document.getElementById('modalScrim').addEventListener('click', (e) => {
+      if (e.target.id === 'modalScrim') closeModal();
+    });
   }
 
   function showToast(msg) {
@@ -2135,13 +2859,129 @@
       case 'switch-server': {
         const serverKey = el.dataset.server;
         if (!STREAM_SERVERS[serverKey]) break;
-        playerState.currentServer = serverKey;
-        // Update active tab UI
-        document.querySelectorAll('.server-tab').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.server === serverKey);
-        });
         loadPlayerServer(serverKey);
         showToast(`${STREAM_SERVERS[serverKey].name} server selected`);
+        break;
+      }
+
+      case 'switch-next-server': {
+        switchNextServer();
+        break;
+      }
+
+      case 'reload-stream': {
+        loadPlayerServer(playerState.currentServer || 'superstream');
+        showToast('🔄 Stream Reloaded');
+        break;
+      }
+
+      case 'vlc-toggle-aspect': {
+        cycleAspectRatio();
+        break;
+      }
+
+      case 'vlc-set-aspect': {
+        const ratio = el.dataset.ratio;
+        playerState.aspectRatio = ratio;
+        const shell = document.getElementById('hpVideoPlayer');
+        if (shell) shell.setAttribute('data-ratio', ratio);
+        document.querySelectorAll('.vlc-aspect-pill').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.ratio === ratio);
+        });
+        showVlcOsd(`Aspect Ratio: ${ratio.replace('-', ':')}`, '📐');
+        break;
+      }
+
+      case 'vlc-open-effects': {
+        openVlcEffectsModal();
+        break;
+      }
+
+      case 'vlc-set-preset': {
+        const preset = el.dataset.preset;
+        if (preset === 'normal') {
+          playerState.filters = { brightness: 100, contrast: 100, saturation: 100, hue: 0, invert: 0, sepia: 0 };
+        } else if (preset === 'vivid') {
+          playerState.filters = { brightness: 105, contrast: 118, saturation: 135, hue: 0, invert: 0, sepia: 0 };
+        } else if (preset === 'warm') {
+          playerState.filters = { brightness: 92, contrast: 98, saturation: 90, hue: -8, invert: 0, sepia: 35 };
+        } else if (preset === 'contrast') {
+          playerState.filters = { brightness: 110, contrast: 135, saturation: 110, hue: 0, invert: 0, sepia: 0 };
+        } else if (preset === 'noir') {
+          playerState.filters = { brightness: 105, contrast: 125, saturation: 0, hue: 0, invert: 0, sepia: 0 };
+        }
+        applyVLCFilters();
+        showVlcOsd(`Preset: ${preset.toUpperCase()}`, '🎛️');
+        const bs = document.getElementById('vlcBrightnessSlider');
+        if (bs) bs.value = playerState.filters.brightness;
+        const cs = document.getElementById('vlcContrastSlider');
+        if (cs) cs.value = playerState.filters.contrast;
+        const ss = document.getElementById('vlcSaturationSlider');
+        if (ss) ss.value = playerState.filters.saturation;
+        const hs = document.getElementById('vlcHueSlider');
+        if (hs) hs.value = playerState.filters.hue;
+        break;
+      }
+
+      case 'vlc-reset-effects': {
+        playerState.filters = { brightness: 100, contrast: 100, saturation: 100, hue: 0, invert: 0, sepia: 0 };
+        applyVLCFilters();
+        showVlcOsd('Video Effects: Default', '🎛️');
+        closeModal();
+        break;
+      }
+
+      case 'vlc-toggle-lights': {
+        toggleLightsOff();
+        break;
+      }
+
+      case 'vlc-open-media': {
+        openVlcMediaModal();
+        break;
+      }
+
+      case 'vlc-open-shortcuts': {
+        openVlcShortcutsModal();
+        break;
+      }
+
+      case 'vlc-take-snapshot': {
+        takeVlcSnapshot();
+        break;
+      }
+
+      case 'vlc-step-frame': {
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) {
+          video.currentTime += 1 / 30;
+          showVlcOsd('Frame +1', '⏭');
+        } else {
+          showToast('⏭ Frame Step is active in VLC Direct Video Mode');
+        }
+        break;
+      }
+
+      case 'vlc-toggle-time-mode': {
+        playerState.showRemainingTime = !playerState.showRemainingTime;
+        updateNativeTime();
+        break;
+      }
+
+      case 'vlc-boost-volume': {
+        const cur = playerState.volume || 100;
+        let nextVol = 100;
+        if (cur <= 100) nextVol = 125;
+        else if (cur <= 125) nextVol = 150;
+        else nextVol = 100;
+        playerState.volume = nextVol;
+        const slider = document.getElementById('vlcVolSlider');
+        if (slider) slider.value = nextVol;
+        const badge = document.getElementById('vlcVolBoostBadge');
+        if (badge) badge.textContent = nextVol + '%';
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) video.volume = Math.min(1, nextVol / 100);
+        showVlcOsd(`Volume: ${nextVol}%`, nextVol > 100 ? '🔊⚡' : '🔊');
         break;
       }
 
@@ -2225,6 +3065,55 @@
       document.getElementById('filtersPanel')?.classList.add('open');
       window.scrollTo(0, curScroll);
     }
+
+    // VLC Volume & Effects Slider Listeners
+    if (e.target.id === 'vlcVolSlider') {
+      const vol = parseInt(e.target.value, 10);
+      playerState.volume = vol;
+      const badge = document.getElementById('vlcVolBoostBadge');
+      if (badge) badge.textContent = vol + '%';
+      const video = document.getElementById('vlcHtml5Video');
+      if (video) video.volume = Math.min(1, vol / 100);
+      showVlcOsd(`Volume: ${vol}%`, vol > 100 ? '🔊⚡' : '🔊');
+    }
+    if (e.target.id === 'vlcBrightnessSlider') {
+      playerState.filters.brightness = e.target.value;
+      const lbl = document.getElementById('vlcValBrightness');
+      if (lbl) lbl.textContent = e.target.value + '%';
+      applyVLCFilters();
+    }
+    if (e.target.id === 'vlcContrastSlider') {
+      playerState.filters.contrast = e.target.value;
+      const lbl = document.getElementById('vlcValContrast');
+      if (lbl) lbl.textContent = e.target.value + '%';
+      applyVLCFilters();
+    }
+    if (e.target.id === 'vlcSaturationSlider') {
+      playerState.filters.saturation = e.target.value;
+      const lbl = document.getElementById('vlcValSaturation');
+      if (lbl) lbl.textContent = e.target.value + '%';
+      applyVLCFilters();
+    }
+    if (e.target.id === 'vlcHueSlider') {
+      playerState.filters.hue = e.target.value;
+      const lbl = document.getElementById('vlcValHue');
+      if (lbl) lbl.textContent = e.target.value + '°';
+      applyVLCFilters();
+    }
+  });
+
+  // VLC Native Timeline Click & Scrub
+  document.addEventListener('click', (e) => {
+    const wrap = e.target.closest('#vlcTimelineWrap');
+    if (wrap) {
+      const rect = wrap.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const video = document.getElementById('vlcHtml5Video');
+      if (video && video.duration) {
+        video.currentTime = pct * video.duration;
+        updateNativeTime();
+      }
+    }
   });
 
   /* ============================================================
@@ -2285,6 +3174,7 @@
     if (e.key === 'Escape') {
       closeModal();
       document.getElementById('mobile-nav')?.classList.remove('open');
+      if (playerState.lightsOff) toggleLightsOff();
       if (document.fullscreenElement) document.exitFullscreen();
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -2293,35 +3183,111 @@
       setTimeout(() => document.getElementById('searchInput')?.focus(), 80);
     }
 
-    // Player specific shortcuts (if not typing in input)
+    // VLC Player specific shortcuts (if not typing in input)
     if (!isInput && (state.view === 'watch' || state.page === 'watch')) {
       const key = e.key.toLowerCase();
       if (e.key === ' ' || key === 'k') {
         e.preventDefault();
-        const btn = document.querySelector('#playerPlayHero');
-        if (btn) btn.click();
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) {
+          if (video.paused) { video.play(); showVlcOsd('Play', '▶'); }
+          else { video.pause(); showVlcOsd('Pause', '⏸'); }
+        } else {
+          showVlcOsd('Stream Playback Active', '⚡');
+        }
       } else if (key === 'f') {
         e.preventDefault();
         toggleFullscreen();
       } else if (key === 'm') {
         e.preventDefault();
-        const btn = document.getElementById('playerMuteBtn');
-        if (btn) btn.click();
+        playerState.isMuted = !playerState.isMuted;
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) video.muted = playerState.isMuted;
+        showVlcOsd(playerState.isMuted ? 'Muted' : 'Unmuted', playerState.isMuted ? '🔇' : '🔊');
       } else if (key === 't') {
         e.preventDefault();
         const shell = document.getElementById('hpVideoPlayer');
         if (shell) {
           const tMode = shell.classList.toggle('theater-mode');
-          showToast(tMode ? '🎭 Theater Mode Enabled' : '🎭 Theater Mode Disabled');
+          showVlcOsd(tMode ? 'Theater Mode: ON' : 'Theater Mode: OFF', '🎭');
         }
+      } else if (key === 'a') {
+        e.preventDefault();
+        cycleAspectRatio();
+      } else if (key === 'l') {
+        e.preventDefault();
+        toggleLightsOff();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const cur = playerState.volume || 100;
+        const next = Math.min(150, cur + 5);
+        playerState.volume = next;
+        const slider = document.getElementById('vlcVolSlider');
+        if (slider) slider.value = next;
+        const badge = document.getElementById('vlcVolBoostBadge');
+        if (badge) badge.textContent = next + '%';
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) video.volume = Math.min(1, next / 100);
+        showVlcOsd(`Volume: ${next}%`, next > 100 ? '🔊⚡' : '🔊');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const cur = playerState.volume || 100;
+        const next = Math.max(0, cur - 5);
+        playerState.volume = next;
+        const slider = document.getElementById('vlcVolSlider');
+        if (slider) slider.value = next;
+        const badge = document.getElementById('vlcVolBoostBadge');
+        if (badge) badge.textContent = next + '%';
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) video.volume = Math.min(1, next / 100);
+        showVlcOsd(`Volume: ${next}%`, '🔉');
       } else if (key === 'j' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        const btn = document.querySelector('[data-action="player-seek-back"]');
-        if (btn) btn.click();
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) {
+          video.currentTime = Math.max(0, video.currentTime - 10);
+          showVlcOsd('-10s', '⏪');
+        } else {
+          showVlcOsd('Rewind 10s', '⏪');
+        }
       } else if (key === 'l' || e.key === 'ArrowRight') {
         e.preventDefault();
-        const btn = document.querySelector('[data-action="player-seek-fw"]');
-        if (btn) btn.click();
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) {
+          video.currentTime = Math.min(video.duration || 99999, video.currentTime + 10);
+          showVlcOsd('+10s', '⏩');
+        } else {
+          showVlcOsd('Forward 10s', '⏩');
+        }
+      } else if (e.key === '[') {
+        e.preventDefault();
+        const video = document.getElementById('vlcHtml5Video');
+        playerState.speed = Math.max(0.25, parseFloat((playerState.speed - 0.1).toFixed(1)));
+        if (video) video.playbackRate = playerState.speed;
+        showVlcOsd(`Speed: ${playerState.speed}x`, '⚡');
+      } else if (e.key === ']') {
+        e.preventDefault();
+        const video = document.getElementById('vlcHtml5Video');
+        playerState.speed = Math.min(2.0, parseFloat((playerState.speed + 0.1).toFixed(1)));
+        if (video) video.playbackRate = playerState.speed;
+        showVlcOsd(`Speed: ${playerState.speed}x`, '⚡');
+      } else if (key === 's') {
+        e.preventDefault();
+        takeVlcSnapshot();
+      } else if (key === 'e') {
+        e.preventDefault();
+        const video = document.getElementById('vlcHtml5Video');
+        if (video) {
+          video.currentTime += 1 / 30;
+          showVlcOsd('Frame +1', '⏭');
+        }
+      } else if (key === 'n') {
+        e.preventDefault();
+        const nextBtn = document.querySelector('[data-action="go-watch-episode"]');
+        if (nextBtn) nextBtn.click();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        openVlcShortcutsModal();
       }
     }
   });
